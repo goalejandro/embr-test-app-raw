@@ -1,0 +1,13 @@
+{
+  "name": "embr-test-app-raw",
+  "version": "1.0.0",
+  "description": "Test app for Embr database integration (Raw SQL + Express)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.13.0"
+  }
+}

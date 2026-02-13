@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Embr Test App - Raw SQL</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 2rem; }
+    h1 { color: #f97316; margin-bottom: 0.5rem; }
+    .subtitle { color: #94a3b8; margin-bottom: 2rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; max-width: 1000px; }
+    .card { background: #1e293b; border-radius: 12px; padding: 1.5rem; border: 1px solid #334155; }
+    .card h2 { color: #38bdf8; margin-bottom: 1rem; font-size: 1.1rem; }
+    .status { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; }
+    .status.ok { background: #064e3b; border: 1px solid #10b981; }
+    .status.error { background: #7f1d1d; border: 1px solid #ef4444; }
+    .status.loading { background: #1e3a5f; border: 1px solid #3b82f6; }
+    input[type="text"] { width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #e2e8f0; margin-bottom: 0.5rem; }
+    button { padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; margin-right: 0.5rem; margin-bottom: 0.5rem; }
+    .btn-primary { background: #f97316; color: white; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+    .todo-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid #334155; }
+    .todo-item:last-child { border-bottom: none; }
+    .todo-item.completed span { text-decoration: line-through; color: #64748b; }
+    .todo-item span { flex: 1; }
+    .todo-list { max-height: 300px; overflow-y: auto; }
+    .info-row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #334155; }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { color: #94a3b8; }
+    .info-value { color: #f1f5f9; font-family: monospace; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>Embr Test App</h1>
+  <p class="subtitle">Database integration test - Raw SQL + PostgreSQL</p>
+  <div class="grid">
+    <div class="card">
+      <h2>Health & DB Status</h2>
+      <div id="health" class="status loading">Checking...</div>
+      <div id="dbinfo" class="status loading">Loading DB info...</div>
+      <button class="btn-primary" onclick="checkHealth()">Refresh</button>
+    </div>
+    <div class="card">
+      <h2>Todos (CRUD Test)</h2>
+      <input type="text" id="todoInput" placeholder="New todo..." onkeydown="if(event.key==='Enter')addTodo()">
+      <button class="btn-primary" onclick="addTodo()">Add Todo</button>
+      <div id="todoList" class="todo-list" style="margin-top: 1rem;"></div>
+    </div>
+    <div class="card">
+      <h2>Users (Seed Data)</h2>
+      <div id="userList"></div>
+    </div>
+    <div class="card">
+      <h2>Posts (Relations Test)</h2>
+      <div id="postList"></div>
+    </div>
+  </div>
+  <script>
+    const API = '';
+    async function checkHealth() {
+      const el = document.getElementById('health');
+      const dbEl = document.getElementById('dbinfo');
+      try {
+        const res = await fetch(`${API}/health`);
+        const data = await res.json();
+        el.className = `status ${data.status === 'healthy' ? 'ok' : 'error'}`;
+        el.textContent = JSON.stringify(data, null, 2);
+      } catch (e) { el.className = 'status error'; el.textContent = `Error: ${e.message}`; }
+      try {
+        const res = await fetch(`${API}/api/db/info`);
+        const data = await res.json();
+        dbEl.className = 'status ok';
+        dbEl.textContent = `Tables:\n  todos: ${data.tables.todos}\n  users: ${data.tables.users}\n  posts: ${data.tables.posts}\nDB URL: ${data.databaseUrl}`;
+      } catch (e) { dbEl.className = 'status error'; dbEl.textContent = `DB Info Error: ${e.message}`; }
+    }
+    async function loadTodos() {
+      const el = document.getElementById('todoList');
+      try {
+        const res = await fetch(`${API}/api/todos`);
+        const list = await res.json();
+        el.innerHTML = list.length === 0 ? '<p style="color:#64748b">No todos yet</p>' :
+          list.map(t => `<div class="todo-item ${t.completed ? 'completed' : ''}"><input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTodo(${t.id}, this.checked)"><span>${t.title}</span><button class="btn-danger btn-sm" onclick="deleteTodo(${t.id})">X</button></div>`).join('');
+      } catch (e) { el.innerHTML = `<p style="color:#ef4444">Error: ${e.message}</p>`; }
+    }
+    async function addTodo() {
+      const input = document.getElementById('todoInput');
+      const title = input.value.trim();
+      if (!title) return;
+      await fetch(`${API}/api/todos`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ title }) });
+      input.value = '';
+      loadTodos();
+    }
+    async function toggleTodo(id, completed) {
+      await fetch(`${API}/api/todos/${id}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ completed }) });
+      loadTodos();
+    }
+    async function deleteTodo(id) {
+      await fetch(`${API}/api/todos/${id}`, { method: 'DELETE' });
+      loadTodos();
+    }
+    async function loadUsers() {
+      const el = document.getElementById('userList');
+      try {
+        const res = await fetch(`${API}/api/users`);
+        const list = await res.json();
+        el.innerHTML = list.length === 0 ? '<p style="color:#64748b">No users</p>' :
+          list.map(u => `<div class="info-row"><span class="info-label">${u.name}</span><span class="info-value">${u.email} (${u.posts.length} posts)</span></div>`).join('');
+      } catch (e) { el.innerHTML = `<p style="color:#ef4444">Error: ${e.message}</p>`; }
+    }
+    async function loadPosts() {
+      const el = document.getElementById('postList');
+      try {
+        const res = await fetch(`${API}/api/posts`);
+        const list = await res.json();
+        el.innerHTML = list.length === 0 ? '<p style="color:#64748b">No posts</p>' :
+          list.map(p => `<div style="margin-bottom:0.8rem;padding-bottom:0.8rem;border-bottom:1px solid #334155"><div style="font-weight:600">${p.title} ${p.published ? '<span style="color:#10b981">[published]</span>' : '<span style="color:#f59e0b">[draft]</span>'}</div><div style="color:#94a3b8;font-size:0.85rem">${p.content||''}</div><div style="color:#64748b;font-size:0.8rem">by ${p.author.name}</div></div>`).join('');
+      } catch (e) { el.innerHTML = `<p style="color:#ef4444">Error: ${e.message}</p>`; }
+    }
+    checkHealth(); loadTodos(); loadUsers(); loadPosts();
+  </script>
+</body>
+</html>
