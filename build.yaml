@@ -9,3 +9,4 @@ run:
 database:
   enabled: true
   engine: postgres
+  seed: psql "$DATABASE_URL" -f db/seed.sql
